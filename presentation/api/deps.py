@@ -1,61 +1,51 @@
-import hmac
-import logging
-import os
-from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
 from application.build_evidence_pack import BuildEvidencePackUseCase
-from application.ports import DisputeRepository, EvidencePackRenderer
+from application.ports import AccountRepository, DisputeRepository, EvidencePackRenderer
+from application.submit_dispute import SubmitDisputeUseCase
+from domain.accounts import Account, hash_api_key
 from infrastructure.pdf_renderer import FpdfEvidencePackRenderer
 
-logger = logging.getLogger(__name__)
-
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_renderer = FpdfEvidencePackRenderer()
 
 
-@lru_cache
-def _api_keys() -> dict[str, str]:
-    """CHARGEBACK_API_KEYS="key1:tenant1,key2:tenant2" → {key: tenant_id}."""
-    raw = os.environ.get("CHARGEBACK_API_KEYS", "")
-    keys: dict[str, str] = {}
-    for pair in filter(None, (p.strip() for p in raw.split(","))):
-        key, sep, tenant = pair.partition(":")
-        if not sep or not key or not tenant:
-            raise RuntimeError("CHARGEBACK_API_KEYS entries must be 'key:tenant'")
-        keys[key] = tenant
-    if not keys:
-        logger.warning("CHARGEBACK_API_KEYS is empty — all requests will be rejected")
-    return keys
-
-
-async def get_tenant_id(api_key: Annotated[str | None, Depends(_api_key_header)]) -> str:
-    if api_key:
-        for key, tenant in _api_keys().items():
-            if hmac.compare_digest(key.encode(), api_key.encode()):
-                return tenant
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="invalid or missing API key",
-        headers={"WWW-Authenticate": "APIKey"},
-    )
-
-
+# main.py ka lifespan app start pe repos set karta hai (Postgres ya in-memory)
 def get_repository(request: Request) -> DisputeRepository:
-    # main.py ka lifespan app start pe set karta hai (Postgres ya in-memory)
     repo: DisputeRepository = request.app.state.repo
     return repo
 
 
-@lru_cache
+def get_accounts(request: Request) -> AccountRepository:
+    accounts: AccountRepository = request.app.state.accounts
+    return accounts
+
+
 def get_renderer() -> EvidencePackRenderer:
-    return FpdfEvidencePackRenderer()
+    return _renderer
 
 
-def get_build_pack_use_case(
+async def get_account(
+    api_key: Annotated[str | None, Depends(_api_key_header)],
+    accounts: Annotated[AccountRepository, Depends(get_accounts)],
+) -> Account:
+    # Hash pe lookup — DB me asal key kabhi store nahi hoti
+    account = await accounts.get_by_key_hash(hash_api_key(api_key)) if api_key else None
+    if account is None or not account.active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or missing API key",
+            headers={"WWW-Authenticate": "APIKey"},
+        )
+    return account
+
+
+def get_submit_use_case(
     repo: Annotated[DisputeRepository, Depends(get_repository)],
+    accounts: Annotated[AccountRepository, Depends(get_accounts)],
     renderer: Annotated[EvidencePackRenderer, Depends(get_renderer)],
-) -> BuildEvidencePackUseCase:
-    return BuildEvidencePackUseCase(repo, renderer)
+) -> SubmitDisputeUseCase:
+    return SubmitDisputeUseCase(repo, accounts, BuildEvidencePackUseCase(repo, renderer))

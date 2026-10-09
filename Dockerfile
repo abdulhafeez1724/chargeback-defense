@@ -13,6 +13,7 @@ COPY domain/ domain/
 COPY application/ application/
 COPY infrastructure/ infrastructure/
 COPY presentation/ presentation/
+COPY scripts/ scripts/
 COPY main.py .
 
 RUN useradd --create-home --uid 10001 app

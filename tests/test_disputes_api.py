@@ -1,3 +1,4 @@
+import asyncio
 import base64
 from collections.abc import Iterator
 from io import BytesIO
@@ -8,18 +9,17 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from main import app
-from presentation.api import deps
 
 HEADERS = {"X-API-Key": "test-key"}
 
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv("CHARGEBACK_API_KEYS", "test-key:tenant-a")
-    deps._api_keys.cache_clear()
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("DEV_API_KEYS", "test-key:tenant-a")
+    monkeypatch.setenv("DEV_CREDITS", "2")
     with TestClient(app) as c:
         yield c
-    deps._api_keys.cache_clear()
 
 
 def _payload(**overrides: Any) -> dict[str, Any]:
@@ -112,3 +112,32 @@ def test_rejects_too_many_attachments(client: TestClient) -> None:
 
     assert res.status_code == 422
     assert "at most 10 attachments" in res.text
+
+
+def test_credits_charged_per_new_dispute(client: TestClient) -> None:
+    first = client.post("/disputes", json=_payload(dispute_id="dp_a"), headers=HEADERS)
+    again = client.post("/disputes", json=_payload(dispute_id="dp_a"), headers=HEADERS)
+    second = client.post("/disputes", json=_payload(dispute_id="dp_b"), headers=HEADERS)
+    third = client.post("/disputes", json=_payload(dispute_id="dp_c"), headers=HEADERS)
+
+    assert first.headers["x-credits-remaining"] == "1"
+    assert again.headers["x-credits-remaining"] == "1"  # regenerate free
+    assert second.headers["x-credits-remaining"] == "0"
+    assert third.status_code == 402
+    assert client.get("/account", headers=HEADERS).json() == {"tenant_id": "tenant-a", "credits": 0}
+
+
+def test_dispute_id_reused_for_other_order_conflicts(client: TestClient) -> None:
+    client.post("/disputes", json=_payload(dispute_id="dp_a"), headers=HEADERS)
+    other_order = _payload(dispute_id="dp_a")
+    other_order["order"]["order_id"] = "9999"
+
+    res = client.post("/disputes", json=other_order, headers=HEADERS)
+
+    assert res.status_code == 409
+
+
+def test_deactivated_key_rejected(client: TestClient) -> None:
+    asyncio.run(app.state.accounts.set_active("tenant-a", False))
+    assert client.post("/disputes", json=_payload(), headers=HEADERS).status_code == 401
+    assert client.get("/account", headers=HEADERS).status_code == 401

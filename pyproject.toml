@@ -10,7 +10,7 @@ testpaths = ["tests"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["domain", "application", "infrastructure", "presentation"]
+packages = ["domain", "application", "infrastructure", "presentation", "scripts"]
 
 [[tool.mypy.overrides]]
 module = ["asyncpg", "asyncpg.*"]

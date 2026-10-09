@@ -251,13 +251,22 @@ form.addEventListener("submit", async (ev) => {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      let msg = res.status === 401 ? "Invalid API key." : formatError(await res.json().catch(() => null));
-      $("#error").textContent = msg;
+      if (res.status === 402) {
+        const a = document.createElement("a");
+        a.href = "/#pricing"; a.textContent = "Buy another pack";
+        $("#error").replaceChildren("You have no credits left. ", a, ".");
+        return;
+      }
+      $("#error").textContent = ({
+        401: "Invalid API key.",
+        409: "This dispute ID was already used for a different order. Check the dispute ID.",
+      })[res.status] || formatError(await res.json().catch(() => null));
       return;
     }
     const blob = await res.blob();
     const strength = parseFloat(res.headers.get("X-Evidence-Strength") || "0");
     const missing = (res.headers.get("X-Evidence-Missing") || "").split(",").filter(Boolean);
+    const credits = res.headers.get("X-Credits-Remaining");
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -272,7 +281,10 @@ form.addEventListener("submit", async (ev) => {
     p.textContent = missing.length
       ? `Pack generated. Evidence coverage: ${Math.round(strength * 100)}%. Before submitting, try to add: ${missing.map((m) => LABELS[m]).join(", ")}.`
       : "Pack generated with all recommended evidence for this reason.";
-    box.append(p, a);
+    const note = document.createElement("p");
+    note.className = "hint"; note.style.margin = "8px 0 0";
+    note.textContent = `Credits left: ${credits}. Re-generating this same dispute is free.`;
+    box.append(p, a, note);
     $("#result").append(box);
   } catch {
     $("#error").textContent = "Network error. Please try again.";

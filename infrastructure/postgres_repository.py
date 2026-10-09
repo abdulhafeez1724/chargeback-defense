@@ -2,6 +2,7 @@ import logging
 
 import asyncpg
 
+from infrastructure.postgres_accounts import ACCOUNTS_SCHEMA
 from domain.entities import (
     Attachment,
     Dispute,
@@ -52,6 +53,7 @@ async def create_pool(dsn: str) -> asyncpg.Pool:
     pool = await asyncpg.create_pool(dsn, min_size=1, max_size=5)
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA)
+        await conn.execute(ACCOUNTS_SCHEMA)
     logger.info("postgres pool ready, schema ensured")
     return pool
 
