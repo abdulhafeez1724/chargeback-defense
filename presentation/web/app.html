@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Evidence Pack Builder</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --text: #1d1f23; --muted: #5b616b;
+    --border: #d9d6cf; --accent: #1f5f4a; --accent-text: #ffffff;
+    --ok: #1f7a4f; --warn: #a3520c; --warn-soft: #fbefe2; --ok-soft: #e4f3ea; --err: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141618; --surface: #1c1f22; --text: #eceae4; --muted: #a2a8b0;
+      --border: #363a3f; --accent: #6cc2a2; --accent-text: #0e1a15;
+      --ok: #7fd3a6; --warn: #f0b072; --warn-soft: #33261a; --ok-soft: #1a2c22; --err: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  a { color: var(--accent); }
+  h1 { font-size: 1.6rem; margin: 8px 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  fieldset { border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+             padding: 16px 18px 18px; margin: 0 0 18px; }
+  legend { font-weight: 700; padding: 0 6px; }
+  .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-top: 10px; }
+  input[type=file] { padding: 7px; }
+  input, select, textarea { width: 100%; margin-top: 4px; padding: 9px 10px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 7px; }
+  textarea { resize: vertical; min-height: 60px; }
+  .ev { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 12px; }
+  .ev-head { display: flex; gap: 8px; align-items: end; }
+  .ev-head label { flex: 1; }
+  button { font: inherit; cursor: pointer; border-radius: 7px; padding: 9px 14px; border: 1px solid var(--border);
+           background: transparent; color: var(--text); }
+  button.primary { background: var(--accent); color: var(--accent-text); border: none; font-weight: 600; padding: 12px 22px; }
+  button:disabled { opacity: .6; cursor: default; }
+  .checklist { list-style: none; padding: 0; margin: 8px 0 0; }
+  .checklist li { padding: 4px 0; }
+  .checklist .have { color: var(--ok); }
+  .checklist .need { color: var(--warn); }
+  .result { border-radius: 10px; padding: 16px 18px; margin-top: 18px; }
+  .result.ok { background: var(--ok-soft); }
+  .result.warn { background: var(--warn-soft); }
+  .error { color: var(--err); margin-top: 14px; white-space: pre-line; }
+  .hint { font-size: .85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/">← Chargeback Defense Pack</a>
+  <h1>Build your evidence pack</h1>
+  <p class="sub">Fill in what you have. The checklist shows what's still missing for this dispute reason.</p>
+
+  <form id="f" novalidate>
+    <fieldset>
+      <legend>Access</legend>
+      <label>API key <input name="api_key" type="password" autocomplete="off" required></label>
+      <p class="hint">Sent to you by email after purchase.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Dispute</legend>
+      <div class="row">
+        <label>Dispute ID <input name="dispute_id" required placeholder="dp_..."></label>
+        <label>Reason <select name="reason" id="reason" required></select></label>
+      </div>
+      <ul class="checklist" id="checklist"></ul>
+    </fieldset>
+
+    <fieldset>
+      <legend>Order</legend>
+      <div class="row">
+        <label>Order ID <input name="order_id" required></label>
+        <label>Order date &amp; time <input name="placed_at" type="datetime-local" required></label>
+      </div>
+      <div class="row">
+        <label>Amount <input name="amount" inputmode="decimal" required placeholder="49.99"></label>
+        <label>Currency <input name="currency" value="USD" maxlength="3" required></label>
+      </div>
+      <label>Customer email <input name="customer_email" type="email" required></label>
+      <label>Billing address <input name="billing_address" required></label>
+      <label>Shipping address <input name="shipping_address" required></label>
+      <label>Customer IP (optional) <input name="customer_ip"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Evidence</legend>
+      <div id="evidence"></div>
+      <button type="button" id="add-ev" style="margin-top:12px">+ Add evidence</button>
+    </fieldset>
+
+    <button class="primary" type="submit" id="submit">Generate PDF</button>
+    <div id="error" class="error" role="alert"></div>
+    <div id="result"></div>
+  </form>
+</div>
+
+<script>
+const LABELS = {
+  tracking: "Shipment tracking",
+  delivery_proof: "Proof of delivery",
+  customer_ip: "Customer IP address",
+  billing_match: "Billing details match (AVS/CVC)",
+  customer_communication: "Customer communication",
+  refund_policy: "Refund policy",
+  product_description: "Product description",
+  cancellation_policy: "Cancellation policy",
+  separate_charge_receipt: "Receipt for the other (non-duplicate) charge",
+  prior_undisputed_payments: "Prior undisputed payments on the same card",
+};
+const REASONS = {
+  fraudulent: "Fraudulent / unauthorized",
+  product_not_received: "Product not received",
+  product_unacceptable: "Product not as described",
+  duplicate: "Duplicate charge",
+  subscription_canceled: "Subscription canceled",
+  credit_not_processed: "Refund / credit not processed",
+};
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+let requirements = {};
+
+const $ = (s) => document.querySelector(s);
+const form = $("#f");
+
+function evidenceTypes() {
+  return [...document.querySelectorAll("#evidence select")].map((s) => s.value);
+}
+
+function renderChecklist() {
+  const need = requirements[$("#reason").value] || [];
+  const have = new Set(evidenceTypes());
+  const ul = $("#checklist");
+  ul.replaceChildren(...need.map((t) => {
+    const li = document.createElement("li");
+    const ok = have.has(t);
+    li.className = ok ? "have" : "need";
+    li.textContent = (ok ? "✓ " : "○ ") + LABELS[t] + (ok ? "" : " (recommended)");
+    return li;
+  }));
+}
+
+function addEvidence() {
+  const div = document.createElement("div");
+  div.className = "ev";
+  const sel = document.createElement("select");
+  sel.required = true;
+  // Type khud select nahi karte — galat type = PDF me galat claim
+  const ph = new Option("Choose evidence type…", "");
+  ph.disabled = true; ph.selected = true;
+  sel.add(ph);
+  for (const [v, l] of Object.entries(LABELS)) sel.add(new Option(l, v));
+  sel.addEventListener("change", renderChecklist);
+  const ta = document.createElement("textarea");
+  ta.placeholder = "Describe it: e.g. USPS 9400…, delivered Oct 4 to front door";
+  ta.required = true;
+  const rm = document.createElement("button");
+  rm.type = "button"; rm.textContent = "Remove";
+  rm.addEventListener("click", () => { div.remove(); renderChecklist(); });
+
+  const head = document.createElement("div"); head.className = "ev-head";
+  const lab = document.createElement("label"); lab.textContent = "Type"; lab.append(sel);
+  head.append(lab, rm);
+  const lab2 = document.createElement("label"); lab2.textContent = "Details"; lab2.append(ta);
+  const file = document.createElement("input");
+  file.type = "file"; file.accept = "image/png,image/jpeg";
+  file.addEventListener("change", () => {
+    const f = file.files[0];
+    file.setCustomValidity(f && f.size > MAX_FILE_BYTES ? "Image must be 4 MB or smaller." : "");
+    file.reportValidity();
+  });
+  const lab3 = document.createElement("label");
+  lab3.textContent = "Screenshot or photo (optional, PNG/JPEG, max 4 MB)"; lab3.append(file);
+  div.append(head, lab2, lab3);
+  $("#evidence").append(div);
+  renderChecklist();
+}
+
+async function init() {
+  for (const [v, l] of Object.entries(REASONS)) $("#reason").add(new Option(l, v));
+  $("#reason").addEventListener("change", renderChecklist);
+  $("#add-ev").addEventListener("click", addEvidence);
+  try {
+    const res = await fetch("/disputes/requirements");
+    requirements = await res.json();
+  } catch { /* checklist optional — form still works */ }
+  renderChecklist();
+}
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(",", 2)[1]);  // "data:image/png;base64," hata do
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+async function payload() {
+  const d = Object.fromEntries(new FormData(form));
+  const evidence = await Promise.all([...document.querySelectorAll("#evidence .ev")].map(async (el) => {
+    const f = el.querySelector("input[type=file]").files[0];
+    return {
+      type: el.querySelector("select").value,
+      summary: el.querySelector("textarea").value.trim(),
+      attachment: f ? { filename: f.name, data: await toBase64(f) } : null,
+    };
+  }));
+  return {
+    dispute_id: d.dispute_id.trim(),
+    reason: d.reason,
+    order: {
+      order_id: d.order_id.trim(),
+      amount: d.amount.trim(),
+      currency: d.currency.trim(),
+      placed_at: d.placed_at ? new Date(d.placed_at).toISOString() : "",
+      customer_email: d.customer_email.trim(),
+      billing_address: d.billing_address.trim(),
+      shipping_address: d.shipping_address.trim(),
+      customer_ip: d.customer_ip.trim() || null,
+    },
+    evidence: evidence.filter((e) => e.summary),
+  };
+}
+
+function formatError(body) {
+  if (Array.isArray(body?.detail)) {
+    return body.detail.map((e) => `${e.loc.slice(1).join(" › ")}: ${e.msg}`).join("\n");
+  }
+  return body?.detail || "Something went wrong.";
+}
+
+form.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  $("#error").textContent = "";
+  $("#result").replaceChildren();
+  if (!form.reportValidity()) return;
+  const btn = $("#submit");
+  btn.disabled = true; btn.textContent = "Generating…";
+  try {
+    const body = await payload();
+    const res = await fetch("/disputes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": form.api_key.value },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let msg = res.status === 401 ? "Invalid API key." : formatError(await res.json().catch(() => null));
+      $("#error").textContent = msg;
+      return;
+    }
+    const blob = await res.blob();
+    const strength = parseFloat(res.headers.get("X-Evidence-Strength") || "0");
+    const missing = (res.headers.get("X-Evidence-Missing") || "").split(",").filter(Boolean);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `evidence-${body.dispute_id}.pdf`;
+    a.textContent = "Download PDF again";
+    a.click();
+
+    const box = document.createElement("div");
+    box.className = "result " + (missing.length ? "warn" : "ok");
+    const p = document.createElement("p");
+    p.style.margin = "0 0 8px";
+    p.textContent = missing.length
+      ? `Pack generated. Evidence coverage: ${Math.round(strength * 100)}%. Before submitting, try to add: ${missing.map((m) => LABELS[m]).join(", ")}.`
+      : "Pack generated with all recommended evidence for this reason.";
+    box.append(p, a);
+    $("#result").append(box);
+  } catch {
+    $("#error").textContent = "Network error. Please try again.";
+  } finally {
+    btn.disabled = false; btn.textContent = "Generate PDF";
+  }
+});
+
+init();
+</script>
+</body>
+</html>
