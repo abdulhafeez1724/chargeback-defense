@@ -16,11 +16,15 @@ Product feature-complete hai. Sirf launch-readiness ka kaam karna hai: koi naya 
 - Prod env: `APP_ENV=production`, `DATABASE_URL`, `CHECKOUT_URL`, `CONTACT_EMAIL`, `PACK_PRICE=$19`.
   `DEV_API_KEYS` / `DEV_CREDITS` production me kabhi set nahi karne
 
+## ⚠️ Reminder: Render free Postgres expires 2026-11-28
+Us din tak paid plan pe upgrade ya data migrate karna hai, warna customer accounts/keys/credits aur disputes
+gum ho jayenge (upgrade/backup options: verify in Render docs). Expiry se ~1 hafta pehle (2026-11-21) action lo.
+
 ## Plan (launch)
 1. [x] Tests + mypy; production-readiness check
 2. [x] `APP_ENV=production` guard; docs/deploy.md; docs/fulfillment.md; refund policy
 3. [x] (user) Gumroad product → `CHECKOUT_URL`; support email → `CONTACT_EMAIL`
-4. [ ] (user) Render deploy (docs/deploy.md) → smoke test green
+4. [x] (user) Render deploy (docs/deploy.md) → smoke test green (2026-10-29)
 5. [ ] (user) Outreach posting (docs/outreach.md) → pehla customer → manual fulfillment
 6. Launch ke baad: feedback, phir Phase 2 (Gumroad webhook) / Phase 3
 
@@ -70,7 +74,8 @@ Product feature-complete hai. Sirf launch-readiness ka kaam karna hai: koi naya 
 - [x] APP_ENV=production guard: DATABASE_URL/CHECKOUT_URL/CONTACT_EMAIL missing → startup fail (tests/test_startup_config.py)
 - [x] docs/deploy.md: Render steps, env table, smoke test (locally prod mode + Postgres pe verify)
 - [x] docs/fulfillment.md: Gumroad sale → admin script → email templates, refund policy; landing + /app pe "within 24 hours" + refund line
-- [ ] (user) Render deploy + managed Postgres (docs/deploy.md) → smoke test
+- [x] (user) Render deploy + managed Postgres → https://chargeback-defense.onrender.com; production smoke test pass
+      (health, landing, admin create, PDF 200, free regenerate 200, no credit 402, wrong key 401, deactivate 401)
 - [ ] (user) Outreach posting (docs/outreach.md)
 - [ ] Phase 2 (launch ke baad): Gumroad webhook → scripts/admin create/add-credits automatic
 - [ ] Phase 3: monthly plan, merchant dashboard, usage history (customers ke baad)
