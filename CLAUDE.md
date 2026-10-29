@@ -19,7 +19,7 @@ Product feature-complete hai. Sirf launch-readiness ka kaam karna hai: koi naya 
 ## Plan (launch)
 1. [x] Tests + mypy; production-readiness check
 2. [x] `APP_ENV=production` guard; docs/deploy.md; docs/fulfillment.md; refund policy
-3. [ ] (user) Gumroad product → `CHECKOUT_URL`; support email → `CONTACT_EMAIL`
+3. [x] (user) Gumroad product → `CHECKOUT_URL`; support email → `CONTACT_EMAIL`
 4. [ ] (user) Render deploy (docs/deploy.md) → smoke test green
 5. [ ] (user) Outreach posting (docs/outreach.md) → pehla customer → manual fulfillment
 6. Launch ke baad: feedback, phir Phase 2 (Gumroad webhook) / Phase 3
@@ -58,8 +58,8 @@ Product feature-complete hai. Sirf launch-readiness ka kaam karna hai: koi naya 
 - [x] infrastructure/postgres_repository.py — asyncpg, 2 tables, save() ek transaction; schema startup pe (no Alembic yet)
 - [x] Evidence policy Stripe docs se verify (2026-10): duplicate/subscription/fraud fix, credit_not_processed add
 - [x] Attachments: PNG/JPEG base64 JSON me, Pillow se verify (4MB, 10 max, pixel limit), PDF me exhibits, EXIF rotation fix
-- [ ] (user) Payment: Gumroad product ($19 = 1 credit) → CHECKOUT_URL
-- [ ] (user) Contact email → CONTACT_EMAIL
+- [x] (user) Payment: Gumroad product live ($19 = 1 credit) → CHECKOUT_URL=https://861109752920.gumroad.com/l/yibrtr
+- [x] (user) Contact email → CONTACT_EMAIL=ahafeez791@gmail.com
 - [x] Body size limit middleware (60MB → 413)
 - [x] Dockerfile (non-root, $PORT, pip retries; asyncpg) — container + Postgres me verify; requirements.txt (prod) / requirements-dev.txt
 - [x] Git repo (main)
