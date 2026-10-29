@@ -29,8 +29,21 @@ async def _dev_accounts() -> InMemoryAccountRepository:
     return accounts
 
 
+PRODUCTION_REQUIRED_ENV = ("DATABASE_URL", "CHECKOUT_URL", "CONTACT_EMAIL")
+
+
+def _check_production_env() -> None:
+    """APP_ENV=production me config missing ho to start hi na karo (silent dev-mode fallback se bachne ke liye)."""
+    if os.environ.get("APP_ENV") != "production":
+        return
+    missing = [name for name in PRODUCTION_REQUIRED_ENV if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(f"APP_ENV=production but required env vars are missing: {', '.join(missing)}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    _check_production_env()
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         logger.warning("DATABASE_URL not set — using in-memory storage (lost on restart)")
